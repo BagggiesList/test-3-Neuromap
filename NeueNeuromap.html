@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="de">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Neuro Map Offline</title>
+    <style>
+        body {
+            font-family: Arial, Helvetica, sans-serif;
+            margin: 0;
+            height: 100vh;
+            display: flex;
+            flex-direction: column
+        }
+
+        .top {
+            padding: 8px;
+            background: #111;
+            color: #fff;
+            display: flex;
+            gap: 8px;
+            align-items: center
+        }
+
+        .app {
+            display: flex;
+            flex: 1
+        }
+
+        .left {
+            width: 260px;
+            padding: 12px;
+            background: #0f1724;
+            color: #e6eef6
+        }
+
+        .canvas {
+            flex: 1
+        }
+
+        #network {
+            height: 100%;
+            border: 1px solid #333
+        }
+
+        input,
+        button {
+            padding: 8px;
+            border-radius: 6px;
+            margin-top: 4px;
+            width: 100%
+        }
+    </style>
+    <script src="https://unpkg.com/vis-network@9.1.2/standalone/umd/vis-network.min.js"></script>
+</head>
+
+<body>
+    <div class="top">
+        <span>Offline Neuro Map</span>
+    </div>
+    <div class="app">
+        <div class="left">
+            <input id="nodetext" placeholder="Neuer Knoten" />
+            <button id="addNode">Knoten hinzufügen</button>
+            <button id="addEdge">Kante verbinden</button>
+            <button id="exportJson">Export JSON</button>
+            <input type="file" id="importJson" />
+        </div>
+        <div id="network" class="canvas"></div>
+    </div>
+    <script>
+        const nodes = new vis.DataSet([]);
+        const edges = new vis.DataSet([]);
+        const container = document.getElementById('network');
+        const data = { nodes, edges };
+        const options = { interaction: { hover: true, multiselect: true }, nodes: { shape: 'dot', size: 18 }, physics: { stabilization: true } };
+        const network = new vis.Network(container, data, options);
+
+        let edgeMode = false;
+        let edgeFrom = null;
+
+        document.getElementById('addNode').addEventListener('click', () => {
+            const text = document.getElementById('nodetext').value || 'Neu';
+            const node = { id: Date.now(), label: text };
+            nodes.add(node);
+            document.getElementById('nodetext').value = '';
+        });
+
+        document.getElementById('addEdge').addEventListener('click', () => {
+            edgeMode = true;
+            alert('Klicke Quelle dann Ziel Knoten');
+        });
+
+        network.on('click', params => {
+            if (edgeMode) {
+                if (params.nodes.length === 1) {
+                    if (!edgeFrom) edgeFrom = params.nodes[0];
+                    else {
+                        const to = params.nodes[0];
+                        const edge = { id: Date.now(), from: edgeFrom, to: to };
+                        edges.add(edge);
+                        edgeFrom = null;
+                        edgeMode = false;
+                    }
+                }
+            }
+        });
+
+        network.on('dragEnd', params => {
+            if (params.nodes && params.nodes.length) {
+                params.nodes.forEach(id => {
+                    const pos = network.getPositions([id])[id];
+                    nodes.update({ id, x: pos.x, y: pos.y });
+                });
+            }
+        });
+
+        // Export JSON
+        document.getElementById('exportJson').addEventListener('click', () => {
+            const jsonStr = JSON.stringify({ nodes: nodes.get(), edges: edges.get() });
+            const blob = new Blob([jsonStr], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'neuromap.json';
+            a.click();
+            URL.revokeObjectURL(url);
+        });
+
+        // Import JSON
+        document.getElementById('importJson').addEventListener('change', e => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = ev => {
+                try {
+                    const obj = JSON.parse(ev.target.result);
+                    nodes.clear();
+                    edges.clear();
+                    nodes.add(obj.nodes);
+                    edges.add(obj.edges);
+                } catch (err) {
+                    alert('Ungültige JSON-Datei');
+                }
+            };
+            reader.readAsText(file);
+        });
+    </script>
+</body>
+
+</html>
